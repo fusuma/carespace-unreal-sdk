@@ -1,0 +1,195 @@
+name: Carespace SDK Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  # Unreal Engine version
+  UE_VERSION: "5.3"
+  
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Unreal Engine
+      uses: game-ci/unity-test-runner@v4
+      env:
+        UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      with:
+        unityVersion: ${{ env.UE_VERSION }}
+        
+    - name: Cache Unreal Engine
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/UnrealEngine
+          ~/.cache/UnrealBuildTool
+        key: ${{ runner.os }}-unreal-${{ env.UE_VERSION }}-${{ hashFiles('**/*.Build.cs') }}
+        restore-keys: |
+          ${{ runner.os }}-unreal-${{ env.UE_VERSION }}-
+          
+    - name: Generate project files
+      run: |
+        # This would typically use UnrealBuildTool to generate project files
+        echo "Generating Unreal project files..."
+        # UnrealBuildTool -projectfiles -project="CarespaceSDK.uproject" -game -rocket -progress
+        
+    - name: Build CarespaceSDK
+      run: |
+        echo "Building CarespaceSDK module..."
+        # UnrealBuildTool CarespaceSDK Linux Development -Project="CarespaceSDK.uproject" -TargetType=Game
+        
+    - name: Build CarespaceSDKTests
+      run: |
+        echo "Building CarespaceSDKTests module..."
+        # UnrealBuildTool CarespaceSDKTests Linux Development -Project="CarespaceSDK.uproject" -TargetType=Game
+        
+    - name: Run Unit Tests
+      run: |
+        echo "Running Unreal Engine automation tests..."
+        # UE4Editor-Cmd CarespaceSDK.uproject -ExecCmds="Automation RunTests CarespaceSDK;quit" -TestExit="Automation Test Queue Empty" -ReportOutputDir="TestResults" -log
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: TestResults/
+        
+    - name: Parse test results
+      if: always()
+      run: |
+        echo "Parsing test results..."
+        # Custom script to parse Unreal's test output format
+        
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup clang-format
+      run: |
+        sudo apt-get update
+        sudo apt-get install clang-format
+        
+    - name: Check code formatting
+      run: |
+        echo "Checking C++ code formatting..."
+        find Source/ -name "*.h" -o -name "*.cpp" | xargs clang-format --dry-run --Werror
+        
+    - name: Run static analysis
+      run: |
+        echo "Running static analysis..."
+        # Could integrate tools like:
+        # - clang-static-analyzer
+        # - cppcheck
+        # - PVS-Studio (for Unreal Engine)
+        
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Run security scan
+      uses: github/super-linter@v4
+      env:
+        DEFAULT_BRANCH: main
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VALIDATE_CPP: true
+        VALIDATE_JSON: true
+        VALIDATE_MARKDOWN: true
+        
+    - name: Check for hardcoded secrets
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Check documentation
+      run: |
+        echo "Checking documentation completeness..."
+        
+        # Check that key files exist
+        test -f README.md || (echo "README.md missing" && exit 1)
+        test -f LICENSE || (echo "LICENSE missing" && exit 1)
+        test -f CHANGELOG.md || (echo "CHANGELOG.md missing" && exit 1)
+        test -f CONTRIBUTING.md || (echo "CONTRIBUTING.md missing" && exit 1)
+        test -f API-REFERENCE.md || (echo "API-REFERENCE.md missing" && exit 1)
+        
+        # Check that documentation is not empty
+        test -s README.md || (echo "README.md is empty" && exit 1)
+        test -s CHANGELOG.md || (echo "CHANGELOG.md is empty" && exit 1)
+        
+        echo "Documentation check passed!"
+        
+    - name: Validate markdown
+      uses: DavidAnson/markdownlint-cli2-action@v13
+      with:
+        globs: '**/*.md'
+        
+  package:
+    name: Package Plugin
+    runs-on: ubuntu-latest
+    needs: [test, lint, security, documentation]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Unreal Engine
+      uses: game-ci/unity-test-runner@v4
+      env:
+        UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      with:
+        unityVersion: ${{ env.UE_VERSION }}
+        
+    - name: Package plugin
+      run: |
+        echo "Packaging Carespace SDK plugin..."
+        # RunUAT BuildPlugin -Plugin="CarespaceSDK.uplugin" -Package="PackagedPlugin" -Rocket
+        
+    - name: Upload packaged plugin
+      uses: actions/upload-artifact@v3
+      with:
+        name: carespace-sdk-plugin
+        path: PackagedPlugin/
+        
+    - name: Create release package
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        echo "Creating release package..."
+        zip -r CarespaceSDK-${{ github.ref_name }}.zip PackagedPlugin/
+        
+    - name: Upload to release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: CarespaceSDK-${{ github.ref_name }}.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
