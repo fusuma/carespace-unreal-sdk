@@ -1,0 +1,41 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0.0",
+	"FriendlyName": "Carespace SDK",
+	"Description": "Official Unreal Engine SDK for the Carespace API - Build powerful healthcare and rehabilitation applications",
+	"Category": "Third Party",
+	"CreatedBy": "Carespace Team",
+	"CreatedByURL": "https://carespace.ai",
+	"DocsURL": "https://docs.carespace.ai/unreal",
+	"MarketplaceURL": "",
+	"SupportURL": "https://support.carespace.ai",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "CarespaceSDK",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64",
+				"Mac",
+				"Linux",
+				"IOS",
+				"Android"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "HTTP",
+			"Enabled": true
+		},
+		{
+			"Name": "Json",
+			"Enabled": true
+		}
+	]
+}
